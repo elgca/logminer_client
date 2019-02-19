@@ -1,0 +1,11 @@
+{"namespace": "elgca.io.logmnr",
+  "type": "record",
+  "name": "LogMinerData",
+  "fields": [
+    {"name": "ssn", "type": "long"},
+    {"name": "xid", "type": ["string", "null"]},
+    {"name": "redoSql", "type": ["string", "null"]},
+    {"name": "operation", "type": ["int", "null"]},
+    {"name": "timestamp", "type": ["long", "null"]}
+  ]
+}
