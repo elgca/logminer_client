@@ -1,14 +1,18 @@
 package elgca.logmnr;
 
+import com.google.common.collect.Iterators;
+import elgca.io.logmnr.LogMinerData;
 import elgca.logmnr.LogMinerSchemas.Operation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.sql.*;
+import java.util.Iterator;
 import java.util.Set;
 
 import static elgca.logmnr.LogMinerSchemas.LogMnrContents.*;
+import static elgca.logmnr.LogMinerSchemas.LogMnrOptions.*;
 
 public class LogMinerReader implements Closeable {
     private static final Logger LOGGER = LoggerFactory.getLogger(LogMinerReader.class);
@@ -29,13 +33,15 @@ public class LogMinerReader implements Closeable {
 
     private ResultSet logMinerData;
 
+    private RecordLocalStorage storage;
 
     public LogMinerReader(Connection connection,
                           String databaseName,
                           Set<TableId> tableIds,
                           int db_fetch_size,
                           long streamOffsetScn,
-                          String dictFilePath
+                          String dictFilePath,
+                          String cachePath
     ) throws SQLException {
         this.connection = connection;
         this.db_fetch_size = db_fetch_size;
@@ -44,10 +50,36 @@ public class LogMinerReader implements Closeable {
         this.streamOffsetScn = streamOffsetScn;
         this.closed = false;
         this.dictFilePath = dictFilePath;
+        storage = new RecordLocalStorage(cachePath);
 
-        startLogMnrStmt = connection.prepareCall(LogMinerSchemas.getStartLogMinerSQL());
+        String startLogMnr =
+                LogMinerSchemas.getStartLogMinerSQL(true,
+                        CONTINUOUS_MINE,
+                        SKIP_CORRUPTION,
+                        NO_SQL_DELIMITER,
+                        NO_ROWID_IN_STMT
+                );
+
+        String logMinerSelectSql = String.format("%s WHERE (%s AND %s ) OR %s",
+                LogMinerSchemas.getSelectLogMnrContentsSQL(),
+                //monitor dml type
+                LogMinerSchemas.getSupportedOperations(Operation.INSERT, Operation.UPDATE, Operation.DELETE),
+                //monitor table list
+                LogMinerSchemas.parseTableWhiteList(this.tableIds).get(),
+                //use local cache, monitor commit and rollback
+                LogMinerSchemas.getSupportedOperations(Operation.COMMIT, Operation.ROLLBACK)
+        );
+
+        LOGGER.info(startLogMnr);
+        LOGGER.info(logMinerSelectSql);
+
+        startLogMnrStmt = connection.prepareCall(startLogMnr);
         endLogMnrStmt = connection.prepareCall(LogMinerSchemas.getStopLogMinerSQL());
-        logMinerSelect = connection.prepareCall(LogMinerSchemas.logMinerSelectSql(tableIds));
+        logMinerSelect = connection.prepareCall(logMinerSelectSql);
+        logMinerSelect.setFetchSize(1);
+        if(db_fetch_size > 1){
+            logMinerSelect.setFetchSize(db_fetch_size);
+        }
 
         getOldestSCN = connection.prepareCall(LogMinerSchemas.getOldestSCN());
         getLatestSCN = connection.prepareCall(LogMinerSchemas.getCurrentSCN());
@@ -82,48 +114,46 @@ public class LogMinerReader implements Closeable {
                 }
             }
             //如果scn号为0,使用当前scn号
-            //初始化时候scn会自动提供(debezium),为0则说明无法再archived_log中找到scn对应的日志文件记录
+            //为0则说明无法再archived_log中找到scn对应的日志文件记录
             if (StartSCN == 0L) {
-                throw new IllegalArgumentException("非法的SCN,无法找到对应的archived log文件: " + streamOffsetScn);
+                throw new IllegalArgumentException("Invalid SCN number : " + streamOffsetScn);
             }
             startLogMnrStmt.setString(1, dictFilePath);
             startLogMnrStmt.setLong(2, StartSCN);
-            startLogMnrStmt.setLong(3,getEndingSCN());
+            startLogMnrStmt.setLong(3, getEndingSCN());
             startLogMnrStmt.execute();
             logMinerSelect.setFetchSize(1);
 //            logMinerSelect.setFetchSize(this.db_fetch_size > 1 ? this.db_fetch_size : 1);
             //use local buffer,should not set scn
             //logMinerSelect.setLong(1, streamOffsetScn);
             logMinerData = logMinerSelect.executeQuery();
-            LOGGER.info("LogMiner启动成功");
+            LOGGER.info("LogMnr started");
         } catch (SQLException e) {
             e.printStackTrace();
             throw e;
         }
     }
 
-
     @Override
     public void close() {
-        LOGGER.info("停止LogMiner...");
+        LOGGER.info("LogMnr stopping...");
         closed = true;
         if (logMinerData != null) {
             try {
-                LOGGER.info("LogMiner session cancel");
+                LOGGER.info("LogMnr stopping...");
                 logMinerData.close();
             } catch (Exception e) {
-                LOGGER.error("关闭数据连接错误", e);
+                LOGGER.error("LogMnr stopping...", e);
             }
         }
         if (endLogMnrStmt != null) {
             try {
                 endLogMnrStmt.execute();
             } catch (SQLException e) {
-                LOGGER.warn("停止LogMiner时出错", e);
+                LOGGER.warn("LogMnr stopping...", e);
             }
         }
     }
-
 
     public LogMinerData read() throws LogMinerException {
         String sqlX = "";
@@ -131,7 +161,7 @@ public class LogMinerReader implements Closeable {
             if (!this.closed && logMinerData.next()) {
                 Long scn = logMinerData.getLong(SCN.index());
                 String username = logMinerData.getString(USERNAME.index());
-                Operation operation = Operation.fromCode(logMinerData.getInt(OPERATION_CODE.index()));
+                int operation = logMinerData.getInt(OPERATION_CODE.index());
                 Timestamp timeStamp = logMinerData.getTimestamp(TIMESTAMP.index());
                 Long commitScn = logMinerData.getLong(COMMIT_SCN.index());
                 int sequence = logMinerData.getInt(SEQUENCE.index());
@@ -144,7 +174,7 @@ public class LogMinerReader implements Closeable {
                 String rowId = logMinerData.getString(ROW_ID.index());
                 String xid = xidUsn + "." + xidSlt + "." + xidSqn;
 
-                String segOwner = String.valueOf(logMinerData.getString(SEG_OWNER.index()));
+                String segOwner = logMinerData.getString(SEG_OWNER.index());
                 String segName = logMinerData.getString(TABLE_NAME.index());
 
                 boolean contSF = logMinerData.getBoolean(CSF.index());
@@ -159,29 +189,60 @@ public class LogMinerReader implements Closeable {
                 }
                 sqlX = sqlRedo;
                 streamOffsetScn = scn;
-                return new LogMinerData(
-                        scn,
-                        commitScn,
-                        sequence,
-                        username,
-                        xid,
-                        databaseName,
-                        segOwner,
-                        segName,
-                        sqlRedo,
-                        timeStamp,
-                        operation,
-                        rsId,
-                        ssn,
-                        rowId);
+                return LogMinerData.newBuilder()
+                        .setScn(scn)
+                        .setCommitScn(commitScn)
+                        .setSequence(sequence)
+                        .setUsername(username)
+                        .setXid(xid)
+                        .setDatabaseName(databaseName)
+                        .setSegOwner(segOwner)
+                        .setSegName(segName)
+                        .setSqlRedo(sqlRedo)
+                        .setTimeStamp(timeStamp.getTime())
+                        .setOperation(operation)
+                        .setRsId(rsId)
+                        .setSsn(ssn)
+                        .setRowId(rowId)
+                        .build();
             }
         } catch (Exception e) {
             if (!this.closed) {
-                throw new LogMinerException("redo_sql:" + sqlX, e);
+                closed = true;
+                throw new LogMinerException("read data error:" + sqlX, e);
             } else {
                 LOGGER.warn("ERROR after closed:", e);
             }
         }
         return null;
+    }
+
+    public void process(EventHandler handler) throws LogMinerException {
+        LogMinerData data = read();
+        if (data != null) {
+            switch (Operation.fromCode(data.getOperation())) {
+                case INSERT:
+                case DELETE:
+                case UPDATE:
+                case DDL:
+                    storage.addRecord(data);
+                    break;
+                case COMMIT:
+                    //add commitScn to data
+                    Iterator<LogMinerData> it =
+                            Iterators.transform(
+                                    storage.getRecordIterator(data.getXid()),
+                                    x -> LogMinerData.newBuilder(data)
+                                            .setCommitScn(data.getScn())
+                                            .build());
+                    it.forEachRemaining(handler::process);
+                case ROLLBACK:
+                    storage.remove(data.getXid());
+            }
+        }
+    }
+
+    interface EventHandler {
+        void process(LogMinerData data);
     }
 }

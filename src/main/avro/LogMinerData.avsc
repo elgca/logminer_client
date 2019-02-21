@@ -2,10 +2,19 @@
   "type": "record",
   "name": "LogMinerData",
   "fields": [
-    {"name": "ssn", "type": "long"},
-    {"name": "xid", "type": ["string", "null"]},
-    {"name": "redoSql", "type": ["string", "null"]},
-    {"name": "operation", "type": ["int", "null"]},
-    {"name": "timestamp", "type": ["long", "null"]}
+    {"name": "scn", "type": "long"},
+    {"name": "commitScn", "type": ["null","long"],"default" : null},
+    {"name": "sequence", "type": "int"},
+    {"name": "username", "type": ["null","string"],"default" : null},
+    {"name": "xid", "type": ["null","string"],"default" : null},
+    {"name": "databaseName", "type": ["null","string"],"default" : null},
+    {"name": "segOwner", "type": ["null","string"],"default" : null},
+    {"name": "segName", "type": ["null","string"],"default" : null},
+    {"name": "sqlRedo", "type": ["null","string"],"default" : null},
+    {"name": "operation", "type": ["null","int"],"default" : null},
+    {"name": "timeStamp", "type": ["null","long"],"default" : null},
+    {"name": "rsId", "type": ["null","string"],"default" : null},
+    {"name": "ssn", "type": ["null","long"],"default" : null},
+    {"name": "rowId", "type": ["null","string"],"default" : null}
   ]
 }

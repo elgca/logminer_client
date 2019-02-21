@@ -21,7 +21,7 @@ import java.util.Iterator;
 public class FileBackedQueue implements RecordQueue {
     private int size;
     private LogMinerData tail;
-    private LogMinerData head;
+    private LogMinerData earliest;
 
     public File getFile() {
         return file;
@@ -29,14 +29,19 @@ public class FileBackedQueue implements RecordQueue {
 
     private File file;
     private FileBackedQueueIterator ite;
-    private String txId;
+    private String xid;
 
     private DataFileWriter<LogMinerData> underlying;
 
-    public FileBackedQueue(File dir, String txId) throws IOException {
-        this.txId = txId;
+    @Override
+    public LogMinerData getEarliest() {
+        return earliest;
+    }
+
+    public FileBackedQueue(File dir, String xid) throws IOException {
+        this.xid = xid;
         Path f = Files.createDirectories(dir.toPath());
-        this.file = new File(f.toFile(), txId + ".avro");
+        this.file = new File(f.toFile(), xid + ".avro");
         if (file.exists()) Files.deleteIfExists(file.toPath());
         file.deleteOnExit();
         size = 0;
@@ -98,7 +103,7 @@ public class FileBackedQueue implements RecordQueue {
     @Override
     @SuppressWarnings("unchecked")
     public boolean add(LogMinerData e) {
-        if (head == null) head = e;
+        if (earliest == null) earliest = e;
         tail = e;
         try {
             underlying.append(e);
@@ -164,7 +169,7 @@ public class FileBackedQueue implements RecordQueue {
 
     @Override
     public LogMinerData peek() {
-        return head;
+        return earliest;
     }
 
     @Override
@@ -177,8 +182,8 @@ public class FileBackedQueue implements RecordQueue {
     }
 
     @Override
-    public String getTxId() {
-        return txId;
+    public String getXid() {
+        return xid;
     }
 
     private class FileBackedQueueIterator implements Iterator<LogMinerData>, Closeable {

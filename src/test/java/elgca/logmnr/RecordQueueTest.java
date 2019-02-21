@@ -10,7 +10,7 @@ import static org.junit.Assert.*;
 public class RecordQueueTest {
 
     @Test
-    public void recordStorageTest() throws Exception {
+    public void recordQueueTest() throws Exception {
         RecordLocalStorage disk = new RecordLocalStorage("local-cache");
         RecordLocalStorage mem = new RecordLocalStorage("");
         String txId = "666";
@@ -19,7 +19,10 @@ public class RecordQueueTest {
         assert dq instanceof FileBackedQueue;
         assert mq instanceof InMemoryQueue;
         for (long i = 0; i++ < 100000; ) {
-            LogMinerData log = new LogMinerData(i, null, "1353", 1, System.currentTimeMillis());
+            LogMinerData log = LogMinerData.newBuilder()
+                    .setScn(i)
+                    .setSequence(665)
+                    .build();
             dq.add(log);
             mq.add(log);
         }
@@ -34,7 +37,7 @@ public class RecordQueueTest {
     }
 
     @Test
-    public void inMemoryTest() {
+    public void recordStorageTest() {
 
     }
 
