@@ -4,6 +4,7 @@
   "fields": [
     {"name": "scn", "type": "long"},
     {"name": "commitScn", "type": ["null","long"],"default" : null},
+    {"name": "earliestScn", "type": ["null","long"],"default" : null},
     {"name": "sequence", "type": "int"},
     {"name": "username", "type": ["null","string"],"default" : null},
     {"name": "xid", "type": ["null","string"],"default" : null},

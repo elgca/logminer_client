@@ -37,10 +37,6 @@ public class LogMinerSchemas {
         ROW_ID("ROW_ID");
         private String fieldName;
 
-        public String getFieldName() {
-            return fieldName;
-        }
-
         public int index() {
             return ordinal() + 1;
         }
@@ -120,11 +116,8 @@ public class LogMinerSchemas {
                                              LogMnrOptions... options) {
         Stream<LogMnrOptions> stream = Arrays.stream(options);
         List<String> content = new ArrayList<>();
-        content.add("BEGIN\nDBMS_LOGMNR.START_LOGMNR(\n");
-        content.add("STARTSCN => ?");
-        content.add("ENDSCN => ?");
         if (dictFilePath) {
-            content.add("DICTFILENAME => ?");
+            content.add("DICTFILENAME => :DICTFILENAME");
             stream = stream
                     .filter(x -> {
                         switch (x) {
@@ -136,53 +129,39 @@ public class LogMinerSchemas {
                         }
                     });
         }
-        stream.map(Enum::toString)
+        content.add("STARTSCN => :STARTSCN");
+//        content.add("ENDSCN => :ENDSCN");
+        stream.map(x -> "DBMS_LOGMNR." + x.toString())
                 .reduce((a, b) -> String.format("%s+%s", a, b))
                 .ifPresent(s -> content.add("OPTIONS => " + s));
-        content.add(");\nEND;");
-        return content
+        //        content.add("BEGIN\nDBMS_LOGMNR.START_LOGMNR(\n");
+        //        content.add(");\nEND;");
+        return String.format("BEGIN\nDBMS_LOGMNR.START_LOGMNR(\n%s\n);\nEND;", content
                 .stream()
                 .reduce((a, b) -> String.format("%s,%s", a, b))
-                .get();
+                .get());
     }
-    /*public static String getStartLogMinerSQL() {
-        return "BEGIN\n" +
-                "DBMS_LOGMNR.START_LOGMNR(" +
-                "DICTFILENAME => ?" +
-                "STARTSCN => ?," +
-                "ENDSCN => ?," +
-                "OPTIONS =>  " +
-                "DBMS_LOGMNR.SKIP_CORRUPTION" + //条过错误出错的redo log
-                "+DBMS_LOGMNR.NO_SQL_DELIMITER" +
-                "+DBMS_LOGMNR.NO_ROWID_IN_STMT" +
-                "+DBMS_LOGMNR.CONTINUOUS_MINE" +
-//                "+DBMS_LOGMNR.COMMITTED_DATA_ONLY" + //不使用COMMIT
-                "+DBMS_LOGMNR.STRING_LITERALS_IN_STMT" +
-//                "+DBMS_LOGMNR.DICT_FROM_ONLINE_CATALOG" +
-                ");\n" +
-                "END;";
-        */
 
-    /**
-     * DBMS_LOGMNR.DICT_FROM_ONLINE_CATALOG
-     * DBMS_LOGMNR.CONTINUOUS_MINE
-     * DBMS_LOGMNR.NO_SQL_DELIMITER
-     *//*
-    }
-*/
     public static String readUTLFilePath() {
         return "select value from v$parameter where name like 'utl_file_dir'";
     }
 
     public static String buildDictionaryFile(String utlPath, String dictName) {
-        return String.format("BEGIN\n dbms_logmnr_d.build(dictionary_filename => '%s',dictionary_location => '%s'",
+        return String.format("BEGIN\n dbms_logmnr_d.build(dictionary_filename => '%s',dictionary_location => '%s');\nEND;",
                 dictName,
                 utlPath
         );
     }
 
-    public static String addLogFile(String... logFiles){
-        return "";
+    public static String removeDictionaryFile(String utlPath,String dictName){
+        return String.format("BEGIN\n UTL_FILE.FREMOVE(dictionary_filename => '%s',dictionary_location => '%s');\nEND;",
+                utlPath,
+                dictName
+        );
+    }
+
+    public static String addLogFile() {
+        throw new RuntimeException("not supported");
     }
 
     public static String getOldestSCN() {

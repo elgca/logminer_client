@@ -2,18 +2,20 @@ package elgca.logmnr;
 
 import elgca.io.logmnr.LogMinerData;
 import org.junit.Test;
+import sun.rmi.runtime.Log;
 
+import java.util.ArrayList;
 import java.util.Iterator;
-
-import static org.junit.Assert.*;
+import java.util.List;
 
 public class RecordQueueTest {
 
     @Test
     public void recordQueueTest() throws Exception {
-        RecordLocalStorage disk = new RecordLocalStorage("local-cache");
-        RecordLocalStorage mem = new RecordLocalStorage("");
+        RecordLocalStorage disk = new RecordLocalStorageImpl("local-cache");
+        RecordLocalStorage mem = new RecordLocalStorageImpl("");
         String txId = "666";
+        List<LogMinerData> list = new ArrayList<>();
         RecordQueue dq = disk.getRecordQueue(txId);
         RecordQueue mq = mem.getRecordQueue(txId);
         assert dq instanceof FileBackedQueue;
@@ -25,14 +27,18 @@ public class RecordQueueTest {
                     .build();
             dq.add(log);
             mq.add(log);
+            list.add(log);
         }
-        Thread.sleep(1000);
+//        Thread.sleep(1000);
         Iterator<LogMinerData> it1 = dq.iterator();
         Iterator<LogMinerData> it2 = mq.iterator();
-        while (it1.hasNext() && it2.hasNext()) {
+        Iterator<LogMinerData> it3 = list.iterator();
+        while (it1.hasNext()) {
             LogMinerData a = it1.next();
             LogMinerData b = it2.next();
+            LogMinerData c = it3.next();
             assert a.equals(b);
+            assert a.equals(c);
         }
     }
 

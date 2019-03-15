@@ -1,117 +1,66 @@
 package elgca.logmnr;
 
-import com.google.common.collect.Iterators;
 import elgca.io.logmnr.LogMinerData;
 
-import java.io.File;
-import java.io.IOException;
-import java.util.*;
+import java.util.Iterator;
+import java.util.concurrent.BlockingQueue;
 
-public class RecordLocalStorage {
+public abstract class RecordLocalStorage {
 
-    private final Map<String, RecordQueue> bufferedRecords = new HashMap<>();
-    private final String locate;
+    abstract public BlockingQueue<CommitEvent> getCommittedRecords();
 
-    public RecordLocalStorage(String locate) {
-        this.locate = locate;
-    }
+    abstract public RecordQueue getRecordQueue(String xid);
 
-    public RecordQueue getRecordQueue(String xid) {
-        return bufferedRecords.computeIfAbsent(xid, x -> createTransactionBuffer(xid));
-    }
+    abstract public void remove(String xid);
 
-    public void remove(String xid) {
-        try {
-            RecordQueue queue = bufferedRecords.get(xid);
-            queue.close();
-            bufferedRecords.remove(xid);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
+    abstract public void clearAll();
 
-    public void clearAll() {
-        bufferedRecords.forEach((x, y) -> {
-            try {
-                y.close();
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        });
-        bufferedRecords.clear();
-    }
+    abstract public void addRecord(LogMinerData data);
 
-    private RecordQueue createTransactionBuffer(String xid) {
-        try {
-            return locate == null || locate.length() == 0 ? new InMemoryQueue(xid) :
-                    new FileBackedQueue(new File(locate), xid);
-        } catch (IOException ex) {
-            throw new RuntimeException(ex);
-        }
-    }
-
-    long getMinScn() {
-        return bufferedRecords.values()
-                .stream()
-                .map(Queue::peek)
-                .filter(Objects::nonNull)
-                .map(LogMinerData::getSsn)
-                .filter(Objects::nonNull)
-                .min(Long::compareTo)
-                .orElse(-1L);
-    }
-
-    public void addRecord(LogMinerData data) {
-        String xid = data.getXid();
-        getRecordQueue(xid).add(data);
-    }
-
-    public boolean contains(String xid) {
-        return bufferedRecords.containsKey(xid);
-    }
-
-    public LogMinerData getEarliest(String xid) {
-        return getRecordQueue(xid).getEarliest();
-    }
+    abstract public LogMinerData getEarliest(String xid);
 
     public Iterator<LogMinerData> getRecordIterator(String xid) {
         return getRecordIterator(xid, true);
     }
 
-    public Iterator<LogMinerData> getRecordIterator(String xid, boolean deleteCache) {
-        RecordQueue queue = bufferedRecords.get(xid);
-        bufferedRecords.remove(xid);
-        if (queue == null) {
-            return Collections.emptyIterator();
-        }
-        Iterator<LogMinerData> it = queue.iterator();
-        if (deleteCache) {
-            return new Iterator<LogMinerData>() {
+    abstract public Iterator<LogMinerData> getRecordIterator(String xid, boolean deleteCache);
 
-                @Override
-                public boolean hasNext() {
-                    if (it.hasNext()) {
-                        return true;
-                    } else {
-                        try {
-                            queue.close();
-                        } catch (Exception e) {
-                            e.printStackTrace();
-                        }
-                        return false;
-                    }
-                }
+    public class CommitEvent {
+        private Long earliestScn;
+        private Long commitScn;
+        private String xid;
 
-                @Override
-                public LogMinerData next() {
-                    if (hasNext()) {
-                        return it.next();
-                    } else {
-                        throw new NoSuchElementException();
-                    }
-                }
-            };
+        public CommitEvent(Long earliestScn, Long commitScn, String xid) {
+            this.earliestScn = earliestScn;
+            this.commitScn = commitScn;
+            this.xid = xid;
         }
-        return it;
+
+        public CommitEvent() {
+        }
+
+        public Long getEarliestScn() {
+            return earliestScn;
+        }
+
+        public void setEarliestScn(Long earliestScn) {
+            this.earliestScn = earliestScn;
+        }
+
+        public Long getCommitScn() {
+            return commitScn;
+        }
+
+        public void setCommitScn(Long commitScn) {
+            this.commitScn = commitScn;
+        }
+
+        public String getXid() {
+            return xid;
+        }
+
+        public void setXid(String xid) {
+            this.xid = xid;
+        }
     }
 }

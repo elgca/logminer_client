@@ -9,8 +9,9 @@ sourceCompatibility = 1.8
 
 dependencies {
     compile "org.apache.avro:avro:1.8.1"
-    compile 'com.squareup.tape2:tape:2.0.0-beta1'
-    compile "org.mapdb:mapdb:3.0.5"
+//    compile "org.mapdb:mapdb:3.0.7"
+    compile group: 'org.jetbrains', name: 'annotations', version: '17.0.0'
+    compile "com.google.guava:guava:19.0"
     testCompile group: 'junit', name: 'junit', version: '4.11'
 }
 

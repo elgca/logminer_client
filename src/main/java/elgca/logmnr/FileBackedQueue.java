@@ -17,11 +17,16 @@ import java.nio.file.Path;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
+import java.util.concurrent.atomic.AtomicBoolean;
 
+/**
+ * File backed list with avro.
+ */
 public class FileBackedQueue implements RecordQueue {
     private int size;
     private LogMinerData tail;
     private LogMinerData earliest;
+    private volatile boolean iteratorOnce = true;
 
     public File getFile() {
         return file;
@@ -65,16 +70,13 @@ public class FileBackedQueue implements RecordQueue {
         return tail == null;
     }
 
-    @Override
-    public boolean contains(Object o) {
-        throw new UnsupportedOperationException();
-    }
-
 
     @NotNull
     @Override
     @SuppressWarnings("unchecked")
-    public Iterator<LogMinerData> iterator() {
+    public synchronized Iterator<LogMinerData> iterator() {
+        if(!iteratorOnce) throw new UnsupportedOperationException("iterator only supported Once");
+        iteratorOnce = false;
         try {
             underlying.close();
             if (ite != null) ite.close();
@@ -84,20 +86,6 @@ public class FileBackedQueue implements RecordQueue {
             e.printStackTrace();
             return Collections.emptyIterator();
         }
-    }
-
-
-    @NotNull
-    @Override
-    public Object[] toArray() {
-        throw new UnsupportedOperationException();
-    }
-
-
-    @NotNull
-    @Override
-    public <T> T[] toArray(T[] a) {
-        throw new UnsupportedOperationException();
     }
 
     @Override
@@ -116,27 +104,45 @@ public class FileBackedQueue implements RecordQueue {
     }
 
     @Override
+    public boolean contains(Object o) {
+        throw new UnsupportedOperationException();
+    }
+
+    @NotNull
+    @Override
+    public Object[] toArray() {
+        throw new UnsupportedOperationException();
+    }
+
+    @NotNull
+    @Override
+    public <T> T[] toArray(@NotNull T[] a) {
+        throw new UnsupportedOperationException();
+    }
+
+
+    @Override
     public boolean remove(Object e) {
         throw new UnsupportedOperationException();
     }
 
     @Override
-    public boolean containsAll(Collection<?> c) {
+    public boolean containsAll(@NotNull Collection<?> c) {
         throw new UnsupportedOperationException();
     }
 
     @Override
-    public boolean addAll(Collection<? extends LogMinerData> c) {
+    public boolean addAll(@NotNull Collection<? extends LogMinerData> c) {
         throw new UnsupportedOperationException();
     }
 
     @Override
-    public boolean removeAll(Collection<?> c) {
+    public boolean removeAll(@NotNull Collection<?> c) {
         throw new UnsupportedOperationException();
     }
 
     @Override
-    public boolean retainAll(Collection<?> c) {
+    public boolean retainAll(@NotNull Collection<?> c) {
         throw new UnsupportedOperationException();
     }
 
@@ -174,11 +180,11 @@ public class FileBackedQueue implements RecordQueue {
 
     @Override
     public void close() throws IOException {
-        underlying.close();
+        if (underlying != null) underlying.close();
+        underlying = null;
         if (ite != null) ite.close();
-        if (file.exists()) {
-            Files.deleteIfExists(file.toPath());
-        }
+        ite = null;
+        Files.deleteIfExists(file.toPath());
     }
 
     @Override
