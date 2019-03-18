@@ -2,7 +2,6 @@ package elgca.logmnr;
 
 import elgca.io.logmnr.LogMinerData;
 import org.junit.Test;
-import sun.rmi.runtime.Log;
 
 import java.util.ArrayList;
 import java.util.Iterator;

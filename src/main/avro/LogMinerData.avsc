@@ -13,7 +13,10 @@
     {"name": "segName", "type": ["null","string"],"default" : null},
     {"name": "sqlRedo", "type": ["null","string"],"default" : null},
     {"name": "operation", "type": ["null","int"],"default" : null},
-    {"name": "timeStamp", "type": ["null","long"],"default" : null},
+    {"name": "timeStamp", "type": ["null",{
+      "type" : "long",
+      "logicalType" : "timestamp-micros"
+    }],"default" : null},
     {"name": "rsId", "type": ["null","string"],"default" : null},
     {"name": "ssn", "type": ["null","long"],"default" : null},
     {"name": "rowId", "type": ["null","string"],"default" : null}

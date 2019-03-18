@@ -8,6 +8,8 @@ import org.apache.avro.io.DatumWriter;
 import org.apache.avro.specific.SpecificDatumReader;
 import org.apache.avro.specific.SpecificDatumWriter;
 import org.jetbrains.annotations.NotNull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.io.File;
@@ -23,6 +25,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * File backed list with avro.
  */
 public class FileBackedQueue implements RecordQueue {
+    private static final Logger LOGGER = LoggerFactory.getLogger(FileBackedQueue.class);
     private int size;
     private LogMinerData tail;
     private LogMinerData earliest;

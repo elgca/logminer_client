@@ -91,10 +91,13 @@ public class LogMinerReader implements Closeable {
         switch (mode) {
             case DICT_FROM_REDO_LOGS:
                 options.add(DICT_FROM_REDO_LOGS);
+                break;
             case DICT_FROM_ONLINE_CATALOG:
                 options.add(DICT_FROM_ONLINE_CATALOG);
+                break;
             case DICT_FROM_UTL_FILE:
                 this.dictFilePath = createUTLDictionary(name);
+                break;
         }
         String startLogMnr = LogMinerSchemas.getStartLogMinerSQL(mode, options);
 

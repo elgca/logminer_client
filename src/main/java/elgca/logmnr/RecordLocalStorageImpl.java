@@ -1,6 +1,8 @@
 package elgca.logmnr;
 
 import elgca.io.logmnr.LogMinerData;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
@@ -10,11 +12,13 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
 
 public class RecordLocalStorageImpl extends RecordLocalStorage {
+    private static final Logger LOGGER = LoggerFactory.getLogger(RecordLocalStorageImpl.class);
     private final Map<String, RecordQueue> bufferedRecords = new ConcurrentHashMap<>();
     private final BlockingQueue<CommitEvent> committedRecords = new LinkedBlockingQueue<>();
     private final String locate;
 
     public RecordLocalStorageImpl(String locate) {
+        LOGGER.info("Create record storage {}", locate);
         this.locate = locate;
     }
 
