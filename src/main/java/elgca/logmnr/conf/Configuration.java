@@ -8,7 +8,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-public abstract class Configuration extends AbstractConfiguration{
+public class Configuration extends AbstractConfiguration{
     public final static String NAME_KEY = "name";
     public final static String DICTIONARY_MODE_KEY = "dictionary.mode";
     public final static String TABLE_LIST_KEY = "table.whitelist";
