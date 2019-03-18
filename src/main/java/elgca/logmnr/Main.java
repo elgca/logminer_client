@@ -1,7 +1,7 @@
 package elgca.logmnr;
 
 import elgca.logmnr.jdbc.ConnectionFactory;
-import elgca.logmnr.jdbc.JdbcConfiguration;
+import elgca.logmnr.conf.JdbcConfiguration;
 import elgca.logmnr.jdbc.OracleConnectionFactory;
 
 import java.io.FileReader;
@@ -55,12 +55,13 @@ public class Main {
 
             LogMinerReader reader = new LogMinerReader(
                     name,
-                    connection,
                     configuration.getDatabase(),
+                    connection,
                     tables,
                     1,
                     offsetStorage,
-                    ""
+                    "",//use memory cache
+                    DictionaryMode.DICT_FROM_UTL_FILE
             );
 
             RecordLocalStorageImpl.class.getConstructor(String.class).newInstance("");

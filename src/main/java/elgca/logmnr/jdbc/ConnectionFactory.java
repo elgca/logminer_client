@@ -1,5 +1,7 @@
 package elgca.logmnr.jdbc;
 
+import elgca.logmnr.conf.JdbcConfiguration;
+
 import java.sql.Connection;
 import java.sql.SQLException;
 

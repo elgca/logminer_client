@@ -1,10 +1,13 @@
 package elgca.logmnr;
 
+import org.jetbrains.annotations.NotNull;
+
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class LogMinerSchemas {
+
     public enum LogMnrOptions {
         DICT_FROM_ONLINE_CATALOG,
         DICT_FROM_REDO_LOGS,
@@ -99,9 +102,10 @@ public class LogMinerSchemas {
                 ;
     }
 
-    public static String getSupportedOperations(Operation... op) {
+    public static String getSupportedOperations(List<Operation> op) {
         return "OPERATION_CODE IN (" +
-                Arrays.stream(op)
+                op.stream()
+                        .filter(Objects::nonNull)
                         .map(x -> String.valueOf(x.code))
                         .reduce((a, b) -> a + ", " + b)
                         .get()
@@ -112,11 +116,11 @@ public class LogMinerSchemas {
         return "BEGIN DBMS_LOGMNR.END_LOGMNR; END;";
     }
 
-    public static String getStartLogMinerSQL(boolean dictFilePath,
-                                             LogMnrOptions... options) {
-        Stream<LogMnrOptions> stream = Arrays.stream(options);
+    public static String getStartLogMinerSQL(DictionaryMode mode,
+                                             List<LogMnrOptions> options) {
+        Stream<LogMnrOptions> stream = options.stream();
         List<String> content = new ArrayList<>();
-        if (dictFilePath) {
+        if (mode.equals(DictionaryMode.DICT_FROM_UTL_FILE)) {
             content.add("DICTFILENAME => :DICTFILENAME");
             stream = stream
                     .filter(x -> {
@@ -172,15 +176,16 @@ public class LogMinerSchemas {
         return "SELECT CURRENT_SCN FROM GV$DATABASE";
     }
 
-    public static String logMinerSelectSql(Set<TableId> tableIds) {
+    public static String logMinerSelectSql(@NotNull Set<TableId> tableIds) {
+        assert !tableIds.isEmpty();
         return String.format("%s WHERE (%s AND %s ) OR %s",
                 LogMinerSchemas.getSelectLogMnrContentsSQL(),
                 //monitor dml type
-                LogMinerSchemas.getSupportedOperations(Operation.INSERT, Operation.UPDATE, Operation.DELETE),
+                LogMinerSchemas.getSupportedOperations(Arrays.asList(Operation.INSERT, Operation.UPDATE, Operation.DELETE)),
                 //monitor table list
                 LogMinerSchemas.parseTableWhiteList(tableIds).get(),
                 //use local cache, monitor commit and rollback
-                LogMinerSchemas.getSupportedOperations(Operation.COMMIT, Operation.ROLLBACK)
+                LogMinerSchemas.getSupportedOperations(Arrays.asList(Operation.COMMIT, Operation.ROLLBACK))
         );
     }
 

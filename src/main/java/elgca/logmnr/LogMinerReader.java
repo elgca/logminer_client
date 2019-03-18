@@ -4,12 +4,15 @@ import com.google.common.collect.Iterators;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import elgca.io.logmnr.LogMinerData;
 import elgca.logmnr.LogMinerSchemas.Operation;
+import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.io.File;
 import java.sql.*;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -24,10 +27,11 @@ public class LogMinerReader implements Closeable {
 
     private final String taskName;
 
-    private String dictFilePath;
+    private String dictFilePath = null;
     private final String databaseName;
     private final OffsetStorage offsetStorage;
     private final Connection connection;
+    private final DictionaryMode mode;
     private final CallableStatement logMinerSelect;
     private final CallableStatement startLogMnrStmt;
     private final CallableStatement endLogMnrStmt;
@@ -36,6 +40,7 @@ public class LogMinerReader implements Closeable {
 
     private ResultSet logMinerData;
 
+    private long startCommitScn;
     private final RecordLocalStorage storage;
     private final ExecutorService generationExecutor =
             Executors.newSingleThreadExecutor(new ThreadFactoryBuilder()
@@ -49,70 +54,62 @@ public class LogMinerReader implements Closeable {
 
     /**
      * @param name          app name/dictionary name
+     * @param databaseName  for 12g, not used
      * @param connection    jdbc
-     * @param databaseName  for 12g
      * @param tableIds      white list
      * @param db_fetch_size select fetch size
      * @param offsetStorage offsetStorage
      * @param cachePath     null or '' use memory cache
+     * @param mode          logmnr dictionary mode
      * @throws SQLException
      */
-    public LogMinerReader(String name,
-                          Connection connection,
-                          String databaseName,
-                          Set<TableId> tableIds,
+    public LogMinerReader(@NotNull String name,
+                          @NotNull String databaseName,
+                          @NotNull Connection connection,
+                          @NotNull Set<TableId> tableIds,
                           int db_fetch_size,
-                          OffsetStorage offsetStorage,
-                          String cachePath
+                          @NotNull OffsetStorage offsetStorage,
+                          String cachePath,
+                          @NotNull DictionaryMode mode
     ) throws SQLException {
+        assert !tableIds.isEmpty();
         this.connection = connection;
-        taskName = name;
-        //alter nls time format
-        execute(LogMinerSchemas.NLS_DATE_FORMAT,
-                LogMinerSchemas.NLS_TIMESTAMP_FORMAT,
-                LogMinerSchemas.NLS_TIMESTAMP_TZ_FORMAT,
-                LogMinerSchemas.NLS_NUMERIC_FORMAT);
-        // build flat dictionary file
-        try (CallableStatement getUtlFilePath = connection.prepareCall(LogMinerSchemas.readUTLFilePath())) {
-            String utl_file_path;
-            try (ResultSet rs = getUtlFilePath.executeQuery()) {
-                if (!rs.next()) {
-                    LOGGER.warn("Missing utl_file_path,use tmpdir for dictionary");
-                    utl_file_path = "/tmp/logmnr_reader";
-                } else {
-                    utl_file_path = rs.getString(1);
-                    if (LOGGER.isDebugEnabled()) {
-                        LOGGER.debug("utl_file_path SCN IS {} ", utl_file_path);
-                    }
-                }
-            }
-            if (utl_file_path != null) {
-                String dictName = "logmnr_" + name + ".ora";
-                this.dictFilePath = new File(utl_file_path, dictName).getAbsolutePath();
-                connection.prepareCall(LogMinerSchemas.buildDictionaryFile(utl_file_path, dictName)).execute();
-            }
-        }
+        this.mode = mode;
+        this.taskName = name;
         this.databaseName = databaseName;
         this.offsetStorage = offsetStorage;
-        storage = new RecordLocalStorageImpl(cachePath);
-
-        String startLogMnr =
-                LogMinerSchemas.getStartLogMinerSQL(this.dictFilePath != null,
-                        CONTINUOUS_MINE,
-                        SKIP_CORRUPTION,
-                        NO_SQL_DELIMITER,
-                        DICT_FROM_ONLINE_CATALOG
-//                        NO_ROWID_IN_STMT
-                );
+        this.startCommitScn = this.offsetStorage.getCommitScn();
+        this.storage = new RecordLocalStorageImpl(cachePath);
+        //alter nls time format
+        setNlsFormat();
+        // build flat dictionary file
+        ArrayList<LogMinerSchemas.LogMnrOptions> options = new ArrayList<>();
+        options.add(CONTINUOUS_MINE);
+        options.add(SKIP_CORRUPTION);
+        options.add(NO_SQL_DELIMITER);
+        options.add(NO_ROWID_IN_STMT);
+        switch (mode) {
+            case DICT_FROM_REDO_LOGS:
+                options.add(DICT_FROM_REDO_LOGS);
+            case DICT_FROM_ONLINE_CATALOG:
+                options.add(DICT_FROM_ONLINE_CATALOG);
+            case DICT_FROM_UTL_FILE:
+                this.dictFilePath = createUTLDictionary(name);
+        }
+        String startLogMnr = LogMinerSchemas.getStartLogMinerSQL(mode, options);
 
         String logMinerSelectSql = String.format("%s WHERE (%s AND %s ) OR %s",
                 LogMinerSchemas.getSelectLogMnrContentsSQL(),
                 //monitor dml type
-                LogMinerSchemas.getSupportedOperations(Operation.INSERT, Operation.UPDATE, Operation.DELETE),
+                LogMinerSchemas.getSupportedOperations(Arrays.asList(
+                        Operation.INSERT,
+                        Operation.UPDATE,
+                        Operation.DELETE,
+                        Operation.DDL)),
                 //monitor table list
                 LogMinerSchemas.parseTableWhiteList(tableIds).get(),
                 //use local cache, monitor commit and rollback
-                LogMinerSchemas.getSupportedOperations(Operation.COMMIT, Operation.ROLLBACK)
+                LogMinerSchemas.getSupportedOperations(Arrays.asList(Operation.COMMIT, Operation.ROLLBACK))
         );
 
         LOGGER.info(startLogMnr);
@@ -130,12 +127,43 @@ public class LogMinerReader implements Closeable {
         getLatestSCN = connection.prepareCall(LogMinerSchemas.getCurrentSCN());
     }
 
+    private void setNlsFormat() throws SQLException {
+        execute(LogMinerSchemas.NLS_DATE_FORMAT,
+                LogMinerSchemas.NLS_TIMESTAMP_FORMAT,
+                LogMinerSchemas.NLS_TIMESTAMP_TZ_FORMAT,
+                LogMinerSchemas.NLS_NUMERIC_FORMAT);
+    }
+
+    private String createUTLDictionary(String name) throws SQLException {
+        try (CallableStatement getUtlFilePath = connection.prepareCall(LogMinerSchemas.readUTLFilePath())) {
+            String utl_file_path;
+            try (ResultSet rs = getUtlFilePath.executeQuery()) {
+                if (!rs.next()) {
+                    LOGGER.warn("Missing utl_file_path,use tmpdir for dictionary");
+                    utl_file_path = "/tmp";
+                } else {
+                    utl_file_path = rs.getString(1);
+                    if (utl_file_path == null || utl_file_path.isEmpty()) {
+                        LOGGER.warn("Missing utl_file_path,use tmpdir for dictionary");
+                        utl_file_path = "/tmp";
+                    }
+                    if (LOGGER.isDebugEnabled()) {
+                        LOGGER.debug("utl_file_path IS {} ", utl_file_path);
+                    }
+                }
+            }
+            String dictName = "logmnr_" + name + ".ora";
+            connection.prepareCall(LogMinerSchemas.buildDictionaryFile(utl_file_path, dictName)).execute();
+            return new File(utl_file_path, dictName).getAbsolutePath();
+        }
+    }
+
     private void execute(String... sqls) throws SQLException {
         try (Statement statement = connection.createStatement()) {
             for (String sql : sqls) {
                 statement.execute(sql);
             }
-            if(!connection.getAutoCommit()) connection.commit();
+            if (!connection.getAutoCommit()) connection.commit();
         }
     }
 
@@ -191,6 +219,7 @@ public class LogMinerReader implements Closeable {
             //logMinerSelect.setLong(1, offsetStorage);
             logMinerData = logMinerSelect.executeQuery();
             LOGGER.info("LogMnr started");
+            //thread safe running flag
             this.shutdownLatch = new CountDownLatch(1);
             generationExecutor.submit(this::read);
         } catch (SQLException e) {
@@ -308,7 +337,7 @@ public class LogMinerReader implements Closeable {
     }
 
     public void process(EventHandler handler) throws InterruptedException {
-        process(handler, -1);
+        process(handler, startCommitScn);
     }
 
     @FunctionalInterface

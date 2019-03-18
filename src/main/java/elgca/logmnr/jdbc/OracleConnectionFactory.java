@@ -1,5 +1,6 @@
 package elgca.logmnr.jdbc;
 
+import elgca.logmnr.conf.JdbcConfiguration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
