@@ -63,4 +63,8 @@ public abstract class RecordLocalStorage {
             this.xid = xid;
         }
     }
+
+    static RecordLocalStorage create(String locate) {
+        return new RecordLocalStorageImpl(locate);
+    }
 }

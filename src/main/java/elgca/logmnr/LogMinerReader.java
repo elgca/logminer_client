@@ -27,6 +27,7 @@ public class LogMinerReader implements Closeable {
     private String dictFilePath;
     private final String databaseName;
     private final OffsetStorage offsetStorage;
+    private final Connection connection;
     private final CallableStatement logMinerSelect;
     private final CallableStatement startLogMnrStmt;
     private final CallableStatement endLogMnrStmt;
@@ -64,27 +65,33 @@ public class LogMinerReader implements Closeable {
                           OffsetStorage offsetStorage,
                           String cachePath
     ) throws SQLException {
+        this.connection = connection;
         taskName = name;
+        //alter nls time format
+        execute(LogMinerSchemas.NLS_DATE_FORMAT,
+                LogMinerSchemas.NLS_TIMESTAMP_FORMAT,
+                LogMinerSchemas.NLS_TIMESTAMP_TZ_FORMAT,
+                LogMinerSchemas.NLS_NUMERIC_FORMAT);
         // build flat dictionary file
-        CallableStatement getUtlFilePath = connection.prepareCall(LogMinerSchemas.readUTLFilePath());
-        String utl_file_path;
-        try (ResultSet rs = getUtlFilePath.executeQuery()) {
-            if (!rs.next()) {
-                LOGGER.warn("Missing utl_file_path,use tmpdir for dictionary");
-                utl_file_path = "/tmp/logmnr_reader";
-            } else {
-                utl_file_path = rs.getString(1);
-                if (LOGGER.isDebugEnabled()) {
-                    LOGGER.debug("utl_file_path SCN IS {} ", utl_file_path);
+        try (CallableStatement getUtlFilePath = connection.prepareCall(LogMinerSchemas.readUTLFilePath())) {
+            String utl_file_path;
+            try (ResultSet rs = getUtlFilePath.executeQuery()) {
+                if (!rs.next()) {
+                    LOGGER.warn("Missing utl_file_path,use tmpdir for dictionary");
+                    utl_file_path = "/tmp/logmnr_reader";
+                } else {
+                    utl_file_path = rs.getString(1);
+                    if (LOGGER.isDebugEnabled()) {
+                        LOGGER.debug("utl_file_path SCN IS {} ", utl_file_path);
+                    }
                 }
             }
+            if (utl_file_path != null) {
+                String dictName = "logmnr_" + name + ".ora";
+                this.dictFilePath = new File(utl_file_path, dictName).getAbsolutePath();
+                connection.prepareCall(LogMinerSchemas.buildDictionaryFile(utl_file_path, dictName)).execute();
+            }
         }
-        if (utl_file_path != null) {
-            String dictName = "logmnr_" + name + ".ora";
-            this.dictFilePath = new File(utl_file_path, dictName).getAbsolutePath();
-            connection.prepareCall(LogMinerSchemas.buildDictionaryFile(utl_file_path, dictName)).execute();
-        }
-
         this.databaseName = databaseName;
         this.offsetStorage = offsetStorage;
         storage = new RecordLocalStorageImpl(cachePath);
@@ -121,6 +128,15 @@ public class LogMinerReader implements Closeable {
 
         getOldestSCN = connection.prepareCall(LogMinerSchemas.getOldestSCN());
         getLatestSCN = connection.prepareCall(LogMinerSchemas.getCurrentSCN());
+    }
+
+    private void execute(String... sqls) throws SQLException {
+        try (Statement statement = connection.createStatement()) {
+            for (String sql : sqls) {
+                statement.execute(sql);
+            }
+            if(!connection.getAutoCommit()) connection.commit();
+        }
     }
 
     private long getCurrentScn() throws SQLException {

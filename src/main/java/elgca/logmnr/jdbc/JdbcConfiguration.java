@@ -72,5 +72,15 @@ public class JdbcConfiguration {
         return password;
     }
 
-
+    @Override
+    public String toString() {
+        return "JdbcConfiguration{" +
+                "hostname='" + hostname + '\'' +
+                ", port=" + port +
+                ", database='" + database + '\'' +
+                ", user='" + user + '\'' +
+                ", password='******'" +
+                ", config=" + config +
+                '}';
+    }
 }

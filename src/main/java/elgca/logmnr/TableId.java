@@ -16,8 +16,8 @@ public class TableId {
     }
 
     public TableId(String schemaName, String tableName) {
-        this.schemaName = schemaName;
-        this.tableName = tableName;
+        this.schemaName = cleanString(schemaName);
+        this.tableName = cleanString(tableName);
         id = this.schemaName + "." + this.tableName;
         assert this.tableName != null;
     }
@@ -47,5 +47,11 @@ public class TableId {
     @Override
     public String toString() {
         return id;
+    }
+
+    private static String cleanString(String str) {
+        if (str.startsWith("'") && str.endsWith("'")) str = str.substring(1, str.length() - 1);
+        if (str.startsWith("\"") && str.endsWith("\"")) str = str.substring(1, str.length() - 1);
+        return str;
     }
 }

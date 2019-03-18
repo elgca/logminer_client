@@ -153,7 +153,7 @@ public class LogMinerSchemas {
         );
     }
 
-    public static String removeDictionaryFile(String utlPath,String dictName){
+    public static String removeDictionaryFile(String utlPath, String dictName) {
         return String.format("BEGIN\n UTL_FILE.FREMOVE(dictionary_filename => '%s',dictionary_location => '%s');\nEND;",
                 utlPath,
                 dictName
@@ -198,5 +198,12 @@ public class LogMinerSchemas {
                 .reduce((a, b) -> String.format("%s OR %s", a, b))
                 .map(c -> String.format("( %s )", c));
     }
+
+
+    public static final String NLS_DATE_FORMAT = "alter session set nls_date_format = 'yyyy-mm-dd hh24:mi:ss' ";
+    public static final String NLS_NUMERIC_FORMAT = "alter session set nls_numeric_characters = \'.,\'";
+    public static final String NLS_TIMESTAMP_FORMAT = "alter session set nls_timestamp_format = 'yyyy-mm-dd hh24:mi:ss.ff'";
+    public static final String NLS_TIMESTAMP_TZ_FORMAT = "alter session set nls_timestamp_tz_format = 'yyyy-mm-dd hh24:mi:ss.ff tzh:tzm' ";
+
 
 }

@@ -1,6 +1,6 @@
 package elgca.logmnr;
 
-abstract class OffsetStorage {
+public abstract class OffsetStorage {
 
     abstract public long getCommitScn();
 
@@ -12,7 +12,7 @@ abstract class OffsetStorage {
 
     @Override
     public String toString() {
-        return "OffsetStorage{" +
+        return "Offsets{" +
                 "commitScn=" + String.valueOf(getCommitScn()) +
                 ", earliestScn=" + String.valueOf(getEarliestScn()) +
                 '}';
