@@ -1,16 +1,16 @@
 package elgca.logmnr;
 
+import elgca.logmnr.conf.Configuration;
 import elgca.logmnr.jdbc.ConnectionFactory;
-import elgca.logmnr.conf.JdbcConfiguration;
 import elgca.logmnr.jdbc.OracleConnectionFactory;
 
 import java.io.FileReader;
 import java.sql.Connection;
-import java.util.Arrays;
 import java.util.Properties;
-import java.util.Set;
-import java.util.stream.Collectors;
 
+/**
+ * 读取Oracle的redoLog输出到控制台
+ */
 public class Main {
     public static void main(String[] args) throws Exception {
         String confPath = "conf/config.properties";
@@ -21,16 +21,13 @@ public class Main {
         try (FileReader fileReader = new FileReader(confPath)) {
             properties.load(fileReader);
         }
-        JdbcConfiguration configuration = new JdbcConfiguration(properties);
+
+        Configuration configuration = new Configuration(properties);
         ConnectionFactory factory = new OracleConnectionFactory();
-        String name = properties.getProperty("name");
-        try (Connection connection = factory.connect(configuration)) {
-            Set<TableId> tables = Arrays.stream(properties.getProperty("logmnr.tables").split(","))
-                    .map(TableId::parse)
-                    .collect(Collectors.toSet());
+        try (Connection connection = factory.connect(configuration.getJdbcConfiguration())) {
             OffsetStorage offsetStorage = new OffsetStorage() {
                 long commitscn = -1;
-                long earliestscn = -1;
+                long earliestscn = 1; // from earliest scn
 
                 @Override
                 public long getCommitScn() {
@@ -54,14 +51,14 @@ public class Main {
             };
 
             LogMinerReader reader = new LogMinerReader(
-                    name,
-                    configuration.getDatabase(),
+                    configuration.getTaskName(),
+                    configuration.getJdbcConfiguration().getDatabase(),
                     connection,
-                    tables,
-                    1,
+                    configuration.getTableIds(),
+                    configuration.getFetchSize(),
                     offsetStorage,
-                    "",//use memory cache
-                    DictionaryMode.DICT_FROM_UTL_FILE
+                    configuration.getCachePath(),//use memory cache
+                    configuration.getDictionaryMode()
             );
 
             RecordLocalStorageImpl.class.getConstructor(String.class).newInstance("");

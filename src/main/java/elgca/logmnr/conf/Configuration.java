@@ -11,7 +11,7 @@ import java.util.stream.Collectors;
 public class Configuration extends AbstractConfiguration{
     public final static String NAME_KEY = "name";
     public final static String DICTIONARY_MODE_KEY = "dictionary.mode";
-    public final static String TABLE_LIST_KEY = "table.whitelist";
+    public final static String TABLE_LIST_KEY = "logmnr.tables";
     public final static String FETCH_SIZE_KEY = "fetch.size";
     public final static String LOCAL_CACHED_PATH_KEY = "local.cache.path";
 
@@ -22,12 +22,12 @@ public class Configuration extends AbstractConfiguration{
     String cachePath;
     JdbcConfiguration jdbcConfiguration;
 
-    public Configuration(Map<String, String> config) {
+    public Configuration(Map<?, ?> config) {
         super(config);
         this.dictionaryMode = DictionaryMode.valueOf(getString(DICTIONARY_MODE_KEY));
         this.taskName = getString(NAME_KEY);
         this.tableIds = Arrays.stream(getString(TABLE_LIST_KEY).split("[,]")).map(TableId::parse).collect(Collectors.toSet());
-        this.fetchSize = getInt(FETCH_SIZE_KEY);
+        this.fetchSize = getInt(FETCH_SIZE_KEY) == null ? 1 : getInt(FETCH_SIZE_KEY);
         this.cachePath = getString(LOCAL_CACHED_PATH_KEY);
         this.jdbcConfiguration = new JdbcConfiguration(config);
     }
