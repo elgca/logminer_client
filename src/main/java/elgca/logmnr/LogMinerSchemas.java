@@ -210,5 +210,10 @@ public class LogMinerSchemas {
     public static final String NLS_TIMESTAMP_FORMAT = "alter session set nls_timestamp_format = 'yyyy-mm-dd hh24:mi:ss.ff'";
     public static final String NLS_TIMESTAMP_TZ_FORMAT = "alter session set nls_timestamp_tz_format = 'yyyy-mm-dd hh24:mi:ss.ff tzh:tzm' ";
 
+    public static final String CDB_ROOT = "CDB$ROOT";
+    public static final String SWITCH_TO_CDB_ROOT = "ALTER SESSION SET CONTAINER = CDB$ROOT";
 
+    public static String atlerPDB(String pdb) {
+        return "ALTER SESSION SET CONTAINER = " + pdb;
+    }
 }

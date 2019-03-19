@@ -25,34 +25,14 @@ public class Main {
         Configuration configuration = new Configuration(properties);
         ConnectionFactory factory = new OracleConnectionFactory();
         try (Connection connection = factory.connect(configuration.getJdbcConfiguration())) {
-            OffsetStorage offsetStorage = new OffsetStorage() {
-                long commitscn = -1;
-                long earliestscn = 1; // from earliest scn
-
-                @Override
-                public long getCommitScn() {
-                    return commitscn;
-                }
-
-                @Override
-                public long getEarliestScn() {
-                    return earliestscn;
-                }
-
-                @Override
-                public void setCommitScn(Long scn) {
-                    commitscn = scn;
-                }
-
-                @Override
-                public void setEarliestScn(Long scn) {
-                    earliestscn = scn;
-                }
-            };
+            OffsetStorage offsetStorage = new SimpleOffsetStorage();
+            offsetStorage.setCommitScn(-1L);
+            offsetStorage.setEarliestScn(-1L);
 
             LogMinerReader reader = new LogMinerReader(
                     configuration.getTaskName(),
                     configuration.getJdbcConfiguration().getDatabase(),
+                    null,
                     connection,
                     configuration.getTableIds(),
                     configuration.getFetchSize(),

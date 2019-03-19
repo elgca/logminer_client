@@ -54,7 +54,8 @@ public class LogMinerReader implements Closeable {
 
     /**
      * @param name          app name/dictionary name
-     * @param databaseName  for 12g, not used
+     * @param databaseName  not used
+     * @param pdb           for 12g, not used
      * @param connection    jdbc
      * @param tableIds      white list
      * @param db_fetch_size select fetch size
@@ -65,6 +66,7 @@ public class LogMinerReader implements Closeable {
      */
     public LogMinerReader(@NotNull String name,
                           @NotNull String databaseName,
+                          String pdb,
                           @NotNull Connection connection,
                           @NotNull Set<TableId> tableIds,
                           int db_fetch_size,
@@ -146,14 +148,13 @@ public class LogMinerReader implements Closeable {
                     utl_file_path = "/tmp";
                 } else {
                     utl_file_path = rs.getString(1);
-                    if (utl_file_path == null || utl_file_path.isEmpty()) {
-                        LOGGER.warn("Missing utl_file_path,use tmpdir for dictionary");
-                        utl_file_path = "/tmp";
-                    }
                     if (LOGGER.isDebugEnabled()) {
                         LOGGER.debug("utl_file_path IS {} ", utl_file_path);
                     }
                 }
+            }
+            if (utl_file_path == null || utl_file_path.length() == 0) {
+                return null;
             }
             String dictName = "logmnr_" + name + ".ora";
             connection.prepareCall(LogMinerSchemas.buildDictionaryFile(utl_file_path, dictName)).execute();
@@ -190,7 +191,7 @@ public class LogMinerReader implements Closeable {
         try {
             //archived log中最早的scn号
             long StartSCN = 0L;
-            if (offsetStorage.getEarliestScn() > 0L) {
+            if (offsetStorage.getEarliestScn() >= 0L) {
                 getOldestSCN.setLong(1, offsetStorage.getEarliestScn());
                 ResultSet lastScnFirstPosRSet = getOldestSCN.executeQuery();
                 if (lastScnFirstPosRSet.next()) {
@@ -341,6 +342,23 @@ public class LogMinerReader implements Closeable {
 
     public void process(EventHandler handler) throws InterruptedException {
         process(handler, startCommitScn);
+    }
+
+    private int getDBVersion() {
+        try (Statement statement = connection.createStatement();
+             ResultSet versionSet = statement.executeQuery("SELECT version FROM product_component_version")) {
+            if (versionSet.next()) {
+                String versionStr = versionSet.getString("version");
+                if (versionStr != null) {
+                    int majorVersion = Integer.parseInt(versionStr.substring(0, versionStr.indexOf('.')));
+                    LOGGER.info("Oracle Version is " + majorVersion);
+                    return majorVersion;
+                }
+            }
+        } catch (SQLException ex) {
+            LOGGER.error("Error while getting db version info", ex);
+        }
+        return -1;
     }
 
     @FunctionalInterface
