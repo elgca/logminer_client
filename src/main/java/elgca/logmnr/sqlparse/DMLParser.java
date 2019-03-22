@@ -49,15 +49,17 @@ public class DMLParser {
             switch (((Function) value).getName()) {
                 case "TO_DATE":
                 case "TO_TIMESTAMP":
-                    String timestamp = parseValue(((Function) value).getParameters().getExpressions().get(0)).toString();
+                    String timestamp = ((StringValue) ((Function) value).getParameters().getExpressions().get(0)).getValue();
                     res = LocalDateTime.parse(timestamp, formatter);
                     break;
                 case "TO_NUMBER":
-                    String number = ((Function) value).getParameters().getExpressions().get(0).toString();
+                    String number = ((StringValue) ((Function) value).getParameters().getExpressions().get(0)).getValue();
                     res = new BigDecimal(number);
                     break;
                 default:
-                    throw new UnsupportedOperationException("not supported function:" + ((Function) value).getName());
+                    throw new UnsupportedOperationException("unsupported function:" +
+                            ((Function) value).getName() + ", input: "
+                            + value.toString());
             }
         } else {
             throw new IllegalArgumentException(
@@ -154,7 +156,7 @@ public class DMLParser {
         } else {
             throw new UnsupportedOperationException();
         }
-        return new DMLData(operation, new TableId(table.getSchemaName(),table.getName()), oldValues, newValues);
+        return new DMLData(operation, new TableId(table.getSchemaName(), table.getName()), oldValues, newValues);
     }
 
     static class DMLData {

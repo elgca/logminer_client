@@ -51,7 +51,8 @@ public class TableId {
 
     private static String cleanString(String str) {
         if (str.startsWith("'") && str.endsWith("'")) str = str.substring(1, str.length() - 1);
-        if (str.startsWith("\"") && str.endsWith("\"")) str = str.substring(1, str.length() - 1);
+        else if (str.startsWith("\"") && str.endsWith("\"")) str = str.substring(1, str.length() - 1);
+        else if (str.startsWith("`") && str.endsWith("`")) str = str.substring(1, str.length() - 1);
         return str;
     }
 }
