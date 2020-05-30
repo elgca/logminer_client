@@ -24,7 +24,7 @@ log
 npm-debug.log
 .DS_Store
 phantomjsdriver.log
-
+out/
 generated-sources/
 
 /state/
