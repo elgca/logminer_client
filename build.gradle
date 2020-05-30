@@ -14,9 +14,6 @@ dependencies {
     compile group: 'org.jetbrains', name: 'annotations', version: '17.0.0'
     compile "com.google.guava:guava:19.0"
     compile "com.oracle.database.jdbc:ojdbc8:12.2.0.1"
-    compile "com.oracle.database.jdbc:orai18n:12.2.0.1"
-    compile "com.oracle.database.jdbc:xdb6:12.2.0.1"
-    compile "com.oracle.database.jdbc:xmlparserv2:12.2.0.1"
     testCompile group: 'junit', name: 'junit', version: '4.11'
 }
 
@@ -31,4 +28,8 @@ repositories {
 avro {
     createSetters = false
     fieldVisibility = "PRIVATE"
+}
+
+tasks.withType(JavaCompile) {
+    options.encoding = "UTF-8"
 }
