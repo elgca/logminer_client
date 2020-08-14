@@ -169,7 +169,7 @@ public class LogMinerSchemas {
     }
 
     public static String getOldestSCN() {
-        return "SELECT FIRST_CHANGE#, STATUS from GV$ARCHIVED_LOG WHERE STATUS = 'A' AND FIRST_CHANGE# > ? ORDER BY FIRST_CHANGE#";
+        return "SELECT FIRST_CHANGE#, STATUS from GV$ARCHIVED_LOG WHERE STATUS = 'A' AND FIRST_CHANGE# < ? ORDER BY FIRST_CHANGE# DESC NULLS LAST";
     }
 
     public static String getCurrentSCN() {
